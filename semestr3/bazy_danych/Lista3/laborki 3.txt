@@ -1,0 +1,277 @@
+1. 	CREATE INDEX imieIndex ON osoba (imie);
+	CREATE INDEX dataUrodzeniaIndex ON osoba (dataUrodzenia);
+	CREATE INDEX idNazwaSportIndex ON sport (id, nazwa);
+	CREATE INDEX idNazwaInneIndex ON inne (nazwa, id);
+	CREATE INDEX osobaIdTypHobbyIndex ON hobby (osoba, id, typ);
+	
+	Wcześniej indexami były tylko wszystkie instniejące tu klucze główne.
+	Podobny index został zrobiony w tabeli sport i hobby ponieważ nie zmieniliśmy tam kolejoności
+	kluczy głównych, czyli wszystko indeksuje się tak samo jak wcześniej.
+	
+	Został wybrany domyślny tryb indeksu czy B-tree w celu posegregowaniu elementów od 'najmniejszego' do ' największego'.
+	
+	
+2.	EXPLAIN SELECT imie, plec FROM osoba WHERE  imie LIKE 'A*';
+	-- korzysta z imieIndex
+	
+	EXPLAIN SELECT nazwa FROM sport WHERE typ = 'druzynowy' ORDER BY nazwa;
+	
+	-- nowozrobione indexy nie zostały wykorzystane
+	
+	EXPLAIN SELECT sport1.id, sport2.id FROM sport AS sport1 INNER JOIN sport AS sport2 ON sport1.lokacja = sport2.lokacja WHERE sport1.typ = 'indywidualny' AND sport2.typ = 'indywidualny' AND sport1.id > sport2.id;
+	
+	-- nowozrobione indexy nie zostały wykorzystane
+	
+	EXPLAIN SELECT imie, nazwisko FROM osoba WHERE dataUrodzenia < '2000-01-01';
+	
+	-- nowozrobione indexy nie zostały wykorzystane
+	
+	CREATE VIEW popularnoscHobby AS(
+		SELECT id, COUNT(*) AS liczba FROM hobby GROUP BY id
+	);
+	
+	EXPLAIN SELECT id FROM popularnoscHobby ORDER BY liczba DESC LIMIT 1;
+	
+	-- nowozrobione indexy nie zostały wykorzystane
+	
+	EXPLAIN SELECT imie FROM osoba inner JOIN zwierzak ON osoba.id = zwierzak.ownerID WHERE species = 'dog' AND death IS NULL ORDER BY dataUrodzenia LIMIT 1;
+	
+	-- nowozrobione indexy nie zostały wykorzystane
+	
+
+3.	CREATE TABLE zawody (
+		id INT NOT NULL AUTO_INCREMENT,
+		nazwa VARCHAR(50) NOT NULL,
+		pensjaMin INT NOT NULL,
+		pensjaMax INT NOT NULL,
+		PRIMARY KEY (id)
+	);
+	
+	CREATE TABLE praca (
+		idZawodu INT NOT NULL,
+		idOsoby INT NOT NULL,
+		zarobki INT NOT NULL,
+		PRIMARY KEY (idOsoby)
+	);
+		
+		
+		DELIMITER $$
+		CREATE PROCEDURE generujZawody() 
+	
+		BEGIN
+	
+			DECLARE tablicaZawodow VARCHAR(255);
+			DECLARE nazwaZawodu VARCHAR(30);
+			SET @tablicaZawodow = 'murarz,piekarz,tynkarz,akrobata,ślusarz,malarz,rybak,pisarz,piłkarz,youtuber,';
+			
+		
+		
+			insertLoop: LOOP
+			
+				IF (LOCATE(',', @tablicaZawodow) = 0) THEN
+					LEAVE insertLoop;
+				END IF;
+
+				SET @nazwaZawodu = SUBSTRING(@tablicaZawodow, 1, LOCATE(',',@tablicaZawodow)-1);
+				SET @tablicaZawodow = SUBSTRING(@tablicaZawodow, LOCATE(',',@tablicaZawodow) +1);
+			
+				INSERT IGNORE INTO zawody VALUES(
+					NULL,
+					@nazwaZawodu,
+					FLOOR(RAND()*2000 + 2500),
+					FLOOR(RAND()*2000 + 4500)
+				);
+				
+			END LOOP insertLoop;
+		END$$
+		DELIMITER ;
+		
+		
+		DELIMITER $$
+		CREATE PROCEDURE generujPrace()
+		BEGIN
+		
+			DECLARE finished INTEGER DEFAULT 0;
+			DECLARE idOsoby INT DEFAULT 0;
+			DECLARE idPracy INT;
+			DECLARE minPensja INT;
+			DECLARE maxPensja INT;
+			
+			DECLARE curOsoby CURSOR FOR 
+				SELECT id FROM osoba;
+				
+			DECLARE CONTINUE HANDLER FOR NOT FOUND SET finished = 1;
+			OPEN curOsoby;
+			
+			ustawPrace: LOOP
+			
+				FETCH curOsoby INTO idOsoby;
+				
+				IF finished = 1 THEN
+					LEAVE ustawPrace;
+				END IF;
+				
+				
+				SET idPracy = FLOOR(RAND()*10 +1);
+				SET minPensja = (SELECT pensjaMin FROM zawody WHERE id = idPracy);
+				SET maxPensja = (SELECT pensjaMax FROM zawody WHERE id = idPracy);
+				
+				INSERT INTO praca VALUES(
+					idPracy,
+					idOsoby,
+					FLOOR(RAND()*(maxPensja-minPensja) + minPensja)
+				);
+				
+			END LOOP ustawPrace;
+		END$$
+		DELIMITER ;
+		
+
+4.	DELIMITER $$
+	CREATE PROCEDURE agregowanie(
+		IN agg VARCHAR(20),
+		IN kol VARCHAR(50)
+	)
+		BEGIN
+			DECLARE todaysDate DATE DEFAULT CURRENT_DATE();
+		
+			IF 	agg IN ('MIN', 'MAX', 'COUNT', 'AVG', 'STD', 'GROUP_CONCAT', 'VAR_POP') AND
+				kol IN ('id','imie','nazwisko','dataUrodzenia','plec') THEN
+				
+					IF agg = 'GROUP_CONCAT' AND kol = 'id' THEN 
+						SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ta funkcja nie obsługuje tej tabeli.';
+					ELSEIF kol = 'dataUrodzenia' AND AGG IN('AVG', 'STD', 'VAR_POP') THEN
+						SET @query = CONCAT('SELECT \'', kol, '\', \'', agg, '\',',agg,'( YEAR(CURRENT_DATE()) - YEAR(', kol, '))', 'FROM osoba;' );
+						PREPARE tmp FROM @query;
+						EXECUTE tmp;
+						DEALLOCATE PREPARE tmp;
+					ELSE
+						SET @query = CONCAT('SELECT \'', kol, '\', \'', agg, '\', ', agg, '(', kol, ') ', 'FROM osoba;' );
+						PREPARE tmp FROM @query;
+						EXECUTE tmp;
+						DEALLOCATE PREPARE tmp;
+					END IF;
+			ELSE 
+				SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cos poszlo nie tak ¯\(°_o)/¯.';
+			END IF;
+		END$$
+		DELIMITER ;
+		
+5.	CREATE TABLE hasła (
+		osobaID INT NOT NULL,
+		hasło VARCHAR(40),
+		PRIMARY KEY(osobaID)
+		);
+		
+	DELIMITER $$
+	CREATE PROCEDURE wygenerujHasła()
+		
+		BEGIN
+			DECLARE hasło VARCHAR(20) DEFAULT 'masa';
+			DECLARE finished INTEGER DEFAULT 0;
+			DECLARE tmpID INTEGER;
+			DECLARE tmpName VARCHAR(30);
+			DECLARE hash VARCHAR(40);
+			
+			DECLARE curOsoby CURSOR FOR
+				SELECT id FROM osoba;
+			
+			DECLARE CONTINUE HANDLER FOR NOT FOUND SET finished = 1;
+			OPEN curOsoby;
+			
+			generuj: LOOP
+			
+				FETCH curOsoby INTO tmpID;
+			
+				IF finished = 1 THEN 
+					LEAVE generuj;
+				END IF;
+				
+				SET tmpName = (SELECT imie FROM osoba WHERE id = tmpID);
+				SET hash = sha1(CONCAT(tmpName, hasło));
+				
+				INSERT INTO hasła VALUES(
+					tmpID,
+					hash
+				);
+				
+			END LOOP generuj;
+		END$$
+		DELIMITER ;
+		
+		
+	DELIMITER $$
+	CREATE PROCEDURE logowanie(
+		IN imię VARCHAR(30),
+		IN hasło VARCHAR(20)
+		)
+		
+		BEGIN
+			DECLARE hash VARCHAR(40);
+			DECLARE tmpID INT;
+			
+			SET hash = sha1(CONCAT(imię,hasło));
+			
+			SET tmpID = (SELECT id FROM osoba WHERE osoba.imie = imię LIMIT 1);
+			
+			IF(hash = (SELECT hash FROM hasła WHERE hasła.osobaID = tmpID)) THEN
+				SELECT dataUrodzenia FROM osoba WHERE osoba.id = tmpID;
+			ELSE
+				SELECT date FROM randomDate;
+			END IF;
+		END$$
+		DELIMITER ;
+			
+			
+7. 	DELIMITER $$
+	CREATE PROCEDURE dwumian(
+		IN górnaLiczba INT,
+		IN dolnaLiczba INT
+		)
+		
+		BEGIN	
+			
+			WITH RECURSIVE 
+			liczDwumian(tmpGórna,tmpDolna, wynik) AS 
+			(
+			SELECT górnaLiczba-dolnaLiczba, 0, 1
+			UNION ALL
+			(SELECT tmpGórna+1, tmpDolna+1, ((tmpGórna+1)*wynik/(tmpDolna+1)) FROM liczDwumian WHERE tmpGórna < górnaLiczba)
+			)
+			SELECT * FROM liczDwumian;
+			
+		END$$
+		DELIMITER ;
+		
+
+8.	DELIMITER $$
+	CREATE PROCEDURE podwyzka(
+		IN zawod VARCHAR(50)
+		)
+		BEGIN
+			
+			DECLARE zawodID INT;
+			DECLARE maxPensjaZawodu INT;
+			
+			SET autocommit = 0;
+			SET zawodID = (SELECT zawody.id FROM zawody WHERE zawody.nazwa = zawod);
+			SET maxPensjaZawodu = (SELECT pensjaMax FROM zawody WHERE zawody.nazwa = zawod);
+
+			
+			START TRANSACTION;
+			UPDATE praca SET zarobki = zarobki*1.1 WHERE praca.idZawodu = zawodID;
+			
+			IF (SELECT MAX(praca.zarobki) FROM  praca WHERE praca.idZawodu = zawodID) > maxPensjaZawodu THEN
+				SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Niestety moi służący, bylibyście zbyt bogaci.'; 
+				ROLLBACK;
+			ELSE 
+				COMMIT;
+			END IF;
+		END$$
+		DELIMITER ;
+		
+	-- jeśli chcemy przetestować potrzebujemy zwiększyć max pensje w tabeli zawody
+	UPDATE zawody SET maxPensja = 'nowa  maxPensja' WHERE id = 'id zawodu';
+	
+
+			

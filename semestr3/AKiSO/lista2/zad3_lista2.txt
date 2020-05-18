@@ -1,0 +1,29 @@
+﻿INPUT 
+store X
+input 
+store Y
+
+dzielenie,	load X
+			store reszta
+			subt Y
+            store X
+            load wynik
+            add one
+            store wynik
+            load X
+            Skipcond 000
+            Jump dzielenie
+            
+            
+          
+            load wynik
+            subt one
+            Output 
+            load reszta
+            Output
+	
+X, DEC 0
+Y, DEC 0
+reszta, DEC 0
+wynik, DEC 0
+one, DEC 1

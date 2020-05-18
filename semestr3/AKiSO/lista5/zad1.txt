@@ -1,0 +1,16 @@
+sudo chown root ./zad1 - sprawia że root robi się właścicielem programu - robimy to po to by program mógł działać na jego permisjach
+
+sudo chmod u+s ./zad1 - sprawia że jesteśmy w stanie zmienić uid programu na roota; u ustawia permisje programu na permisje jego właściciela; s - zezwala zmieniać user id w trakcie egzekucji programu
+
+
+2.1
+
+sprawdzenie dla każdego sygnału czy jest on obsługiwany, jeśli nie to wypisuje go
+
+2.2 
+
+wywołanie wszystkich sygnałów na procesie pierwszym (init) i sprawdzenie czy zabija (na uprawnieniach sudo resetuje komputer) 
+
+2.3 
+
+wysłanie 100 sygnałów do rodzica, jednak on ostatecznie nie odbiera ich wszystkich co pokazuje, że nie są one kolejkowane, bo wtedy by odebrał wszystkie 
