@@ -1,0 +1,74 @@
+type("read",key(read)).
+type("write",key(write)).
+type("if",key(if)).
+type("then",key(then)).
+type("else",key(else)).
+type("fi",key(fi)).
+type("while",key(while)).
+type("do",key(do)).
+type("od",key(od)).
+type("and",key(and)).
+type("or",key(or)).
+type("mod",key(mod)).
+
+type(";",sep(;)).
+type("+",sep(+)).
+type("-",sep(-)).
+type("*",sep(*)).
+type("/",sep(/)).
+type("<",sep(<)).
+type(">",sep(>)).
+type("=<",sep(=<)).
+type(">=",sep(>=)).
+type(":=",sep(:=)).
+type("=",sep(=)).
+type("/=",sep(/=)).
+
+% nawiasy
+type(Typ,sep(Typ)):-
+    atom_codes(Typ,X),
+    writeln(X),
+    X = 40.
+type(Typ,sep(Typ)):-
+    atom_codes(Typ,X),
+    X = 41.
+
+
+type_id(Typ,id(Typ)).
+
+type_int(Typ, int(X)):-
+    atom_number(Typ, X),
+    integer(X).
+
+iss_upper([]):- !.
+iss_upper([C|Rest]):-
+    char_type(C,upper),
+    iss_upper(Rest).
+
+
+id(X):-
+    string_chars(X,C),
+    C = [First|Rest],
+    char_type(First, upper),
+    iss_upper(Rest).
+
+set_types([], Curr_types, Final_types):- append([], Curr_types, Final_types), !.
+set_types([First|L], Curr_types, Final_types):-
+    writeln(First), writeln(Curr_types),
+    (   type(First,Fin) -> append([Fin],Curr_types, New_curr_types)
+    ;   type_int(First,Fin) -> append([Fin],Curr_types, New_curr_types)
+    ;   id(First) -> type_id(First,Fin), append([Fin],Curr_types, New_curr_types)
+    ;   string_length(First,N), N1 is N-1, sub_atom(First,0,N1,_,P1), sub_atom(First,_,1,0,P2), writeln(P1), writeln(P2),atom_string(P1,K1), atom_string(P2,K2),
+        (type(K1,Fin);type_int(K1,Fin);(id(K1)->type_id(K1,Fin), writeln(Fin))), (type(K2,Fin2),writeln(Fin2);type_int(K2,Fin2); (   id(K2)->type_id(K2,Fin2))),
+        Fins = [Fin,Fin2], append(Fins, Curr_types, New_curr_types)
+    ),
+    set_types(L, New_curr_types, Final_types).
+
+
+scanner(X,Y):-
+    read_string(X,"","\r",End,String),
+    split_string(String, " \n","\n",L),
+    set_types(L, [], Y).
+
+
+

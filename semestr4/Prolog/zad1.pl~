@@ -1,0 +1,44 @@
+matka(mama,syn).
+ojciec(tato,syn).
+matka(mama,córka).
+ojciec(tato,córka).
+ojciec(dziadzio,tato).
+mê¿czyzna(tato).
+mê¿czyzna(syn).
+mê¿czyzna(dziadzio).
+kobieta(mama).
+kobieta(córka).
+
+diff(X,Y):-
+    X\=Y.
+
+jest_matk¹(X):-
+    matka(X,_).
+
+jest_ojcem(X):-
+    ojciec(X,_).
+
+jest_synem(X):-
+    matka(_,X);
+    ojciec(_,X),
+    mê¿czyzna(X).
+
+rodzic(X,Y):-
+    matka(X,Y);
+    ojciec(X,Y).
+
+rodzenstwo(X,Y):-
+    rodzic(Z,X),
+    rodzic(Z,Y),
+    diff(X,Y).
+
+siostra(X,Y):-
+    rodzenstwo(X,Y),
+    kobieta(X).
+
+dziadek(X,Y):-
+    rodzic(X,Z),
+    ojciec(Z,Y).
+
+
+
