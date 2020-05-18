@@ -1,3 +1,0 @@
-#summary One-sentence summary of this page.
-http://javatrainings.googlecode.com/svn/jee/trunk/jax-rs
-
